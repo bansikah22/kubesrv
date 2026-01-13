@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>kubesrv</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg viewBox="0 0 32 32" fill="white">
+                <path d="M16 2L4 8v8c0 7.7 5.1 14.9 12 17 6.9-2.1 12-9.3 12-17V8L16 2zm0 4l8 4v6c0 5.5-3.4 10.6-8 12.5-4.6-1.9-8-7-8-12.5v-6l8-4z"/>
+                <circle cx="16" cy="16" r="4"/>
+            </svg>
+        </div>
+        <h1>{{MESSAGE}}</h1>
+        <p class="subtitle">kubesrv is running successfully</p>
+        <div class="status">
+            <span class="status-dot"></span>
+            Server Online
+        </div>
+        <div class="info">
+            <div class="info-row">
+                <span class="info-label">Hostname</span>
+                <span class="info-value">{{HOSTNAME}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Version</span>
+                <span class="info-value">{{VERSION}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Uptime</span>
+                <span class="info-value">{{UPTIME}}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Requests</span>
+                <span class="info-value">{{REQUESTS}}</span>
+            </div>
+        </div>
+        <div class="endpoints">
+            <span class="endpoint">/</span>
+            <span class="endpoint">/healthz</span>
+            <span class="endpoint">/info</span>
+            <span class="endpoint">/metrics</span>
+        </div>
+    </div>
+</body>
+</html>
