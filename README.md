@@ -1,6 +1,7 @@
 # kubesrv
 
 Minimal HTTP server in C for Kubernetes testing.
+![UI](./docs/images/latest-ui-14-26.png)
 
 ## Features
 
