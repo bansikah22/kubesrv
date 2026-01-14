@@ -16,8 +16,11 @@ spec:
       containers:
         - name: kubesrv
           image: bansikah/kubesrv:latest
+          imagePullPolicy: Always
           ports:
-            - containerPort: 80
+            - name: http
+              containerPort: 80
+              protocol: TCP
           env:
             - name: PORT
               value: "80"
@@ -28,8 +31,20 @@ spec:
               cpu: 10m
               memory: 16Mi
             limits:
-              cpu: 50m
+              cpu: 100m
               memory: 32Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
           securityContext:
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
