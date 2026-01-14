@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubesrv
+  namespace: kubesrv-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubesrv
+  template:
+    metadata:
+      labels:
+        app: kubesrv
+    spec:
+      containers:
+        - name: kubesrv
+          image: bansikah/kubesrv:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: PORT
+              value: "80"
+            - name: MESSAGE
+              value: "Hello, Kubernetes!"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
