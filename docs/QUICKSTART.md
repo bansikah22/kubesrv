@@ -75,6 +75,16 @@ time curl http://localhost:8080/sleep?ms=2000
 
 # Prometheus metrics
 curl http://localhost:8080/metrics
+
+# Failure injection examples
+curl "http://localhost:8080/fail?code=503"                  # immediate 503
+curl "http://localhost:8080/fail?rate=0.2&code=500"        # every 5th request fails with 500
+
+# Readiness override
+docker run -e READY_DELAY=0 -p 8080:80 bansikah/kubesrv:latest
+
+# Shutdown delay
+kubectl -n kubesrv-ns set env deploy/kubesrv SHUTDOWN_DELAY_MS=5000
 ```
 
 ## Kubernetes Testing

@@ -6,12 +6,12 @@ Minimal HTTP server in C for Kubernetes testing.
 ## Features
 
 - Ultra-small image (~26KB)
-- Fork-based concurrency
+- Simple single-process request handling (deterministic counters)
 - Kubernetes-aware identity endpoints
 - Deterministic failure injection
 - Latency simulation
 - Health checks with proper semantics (/healthz vs /ready)
-- Prometheus metrics with failure tracking
+- Prometheus metrics with per-path counters, failure codes, and inflight gauge
 - Request echo/debug endpoint
 - Configurable via environment variables
 - Zero-shell, zero-tools image
@@ -35,11 +35,13 @@ kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
 | `/healthz` | Liveness check (always returns 200 if process is alive) |
 | `/ready` | Readiness check (503 for first 10s, then 200) |
 | `/info` | JSON server info with uptime and request count |
+| `/rollout` | Same as /info for rollout visibility |
 | `/identity` | Kubernetes pod identity (pod, namespace, node, IP) |
-| `/echo` | Request echo (method, path, client IP) |
-| `/fail?code=500` | Simulate failures (supports 404, 500, 503) |
+| `/echo` | Request echo (method, path, client IP, headers) |
+| `/fail?code=500` | Simulate failures (supports 404, 500, 503); deterministic via FAIL_EVERY_N or rate |
+| `/fail?rate=0.2&code=503` | Fail requests deterministically by rate (every 5th request here) |
 | `/sleep?ms=250` | Simulate latency (max 10000ms) |
-| `/metrics` | Prometheus metrics (requests, failures, uptime) |
+| `/metrics` | Prometheus metrics (requests by path, failures by code, inflight, uptime) |
 
 ## Configuration
 
@@ -47,6 +49,9 @@ kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
 |----------|---------|-------------|
 | `PORT` | `80` | Listen port |
 | `MESSAGE` | `Hello, Kubernetes!` | Greeting message |
+| `READY_DELAY` | `10` | Readiness warmup seconds |
+| `SHUTDOWN_DELAY_MS` | `0` | Delay on SIGTERM before shutdown (ms) |
+| `FAIL_EVERY_N` | `0` | Fail every Nth request (deterministic) |
 | `POD_NAME` | hostname | Pod name (auto-injected via Downward API) |
 | `POD_NAMESPACE` | `default` | Pod namespace (auto-injected) |
 | `POD_IP` | `unknown` | Pod IP (auto-injected) |

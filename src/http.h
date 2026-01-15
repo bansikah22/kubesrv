@@ -8,6 +8,11 @@ typedef struct {
     char method[8];
     char path[256];
     char client_ip[64];
+    struct {
+        char name[64];
+        char value[256];
+    } headers[KUBESRV_MAX_HEADERS];
+    int header_count;
 } http_request_t;
 
 void http_parse_request(const char *raw, http_request_t *req);

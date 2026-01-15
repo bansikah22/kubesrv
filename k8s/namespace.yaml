@@ -3,5 +3,6 @@ kind: Namespace
 metadata:
   name: kubesrv-ns
   labels:
+    pod-security.kubernetes.io/enforce: baseline
     app: kubesrv
     purpose: testing

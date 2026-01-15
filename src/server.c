@@ -45,8 +45,12 @@ int server_init(server_ctx_t *ctx) {
     ctx->start_time = time(NULL);
     ctx->requests = 0;
     ctx->failures = 0;
+    ctx->inflight = 0;
     ctx->port = KUBESRV_DEFAULT_PORT;
     ctx->ready = 0;
+    ctx->ready_delay = KUBESRV_READY_DELAY;
+    ctx->shutdown_delay_ms = 0;
+    ctx->fail_every_n = 0;
     
     if (gethostname(ctx->hostname, sizeof(ctx->hostname)) < 0) {
         strncpy(ctx->hostname, "unknown", sizeof(ctx->hostname) - 1);
@@ -87,6 +91,30 @@ int server_init(server_ctx_t *ctx) {
             ctx->port = p;
         }
     }
+
+    env = getenv("READY_DELAY");
+    if (env != NULL) {
+        int d = atoi(env);
+        if (d >= 0 && d <= 3600) {
+            ctx->ready_delay = d;
+        }
+    }
+
+    env = getenv("SHUTDOWN_DELAY_MS");
+    if (env != NULL) {
+        int d = atoi(env);
+        if (d >= 0 && d <= 60000) {
+            ctx->shutdown_delay_ms = d;
+        }
+    }
+
+    env = getenv("FAIL_EVERY_N");
+    if (env != NULL) {
+        int n = atoi(env);
+        if (n >= 0 && n <= 1000000) {
+            ctx->fail_every_n = n;
+        }
+    }
     
     env = getenv("MESSAGE");
     ctx->message = (env != NULL) ? env : "Hello, Kubernetes!";
@@ -106,11 +134,14 @@ static void handle_client(int fd, const struct sockaddr_in *addr, server_ctx_t *
     int len;
     
     inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
+
+    ctx->inflight++;
     
     n = read(fd, buffer, sizeof(buffer) - 1);
     if (n <= 0) {
+        ctx->inflight--;
         close(fd);
-        _exit(0);
+        return;
     }
     buffer[n] = '\0';
     
@@ -130,8 +161,9 @@ static void handle_client(int fd, const struct sockaddr_in *addr, server_ctx_t *
     fprintf(stdout, "[%s] %s %s %s\n", timestamp, ip, req.method, req.path);
     fflush(stdout);
     
+    ctx->inflight--;
     close(fd);
-    _exit(0);
+    return;
 }
 
 int server_run(server_ctx_t *ctx) {
@@ -139,7 +171,6 @@ int server_run(server_ctx_t *ctx) {
     int opt = 1;
     struct sockaddr_in saddr, caddr;
     socklen_t clen = sizeof(caddr);
-    pid_t pid;
     
     if (setup_signals() < 0) {
         perror("sigaction");
@@ -177,7 +208,7 @@ int server_run(server_ctx_t *ctx) {
     
     fprintf(stdout, "[kubesrv] %s v%s on port %d\n", 
             ctx->hostname, KUBESRV_VERSION, ctx->port);
-    fprintf(stdout, "[kubesrv] Endpoints: / /healthz /ready /info /identity /echo /fail /sleep /metrics\n");
+    fprintf(stdout, "[kubesrv] Endpoints: / /healthz /ready /info /rollout /identity /echo /fail /sleep /metrics\n");
     fflush(stdout);
     
     while (g_running) {
@@ -187,17 +218,11 @@ int server_run(server_ctx_t *ctx) {
             perror("accept");
             continue;
         }
-        
-        pid = fork();
-        if (pid < 0) {
-            perror("fork");
-            close(cfd);
-        } else if (pid == 0) {
-            close(sfd);
-            handle_client(cfd, &caddr, ctx);
-        } else {
-            close(cfd);
-        }
+        handle_client(cfd, &caddr, ctx);
+    }
+
+    if (ctx->shutdown_delay_ms > 0) {
+        usleep(ctx->shutdown_delay_ms * 1000);
     }
     
     fprintf(stdout, "[kubesrv] Shutting down\n");
