@@ -132,8 +132,11 @@ k8s-deploy:
 	@echo "=== Deploying to Kubernetes ==="
 	kubectl apply -f k8s/
 	@echo ""
-	@echo "=== Waiting for pod ==="
-	kubectl wait --for=condition=ready pod -l app=kubesrv -n kubesrv-ns --timeout=60s
+	@echo "=== Forcing rollout restart ==="
+	kubectl -n kubesrv-ns rollout restart deployment/kubesrv || true
+	@echo ""
+	@echo "=== Waiting for rollout ==="
+	kubectl -n kubesrv-ns rollout status deployment/kubesrv --timeout=180s
 	@echo ""
 	kubectl get pods -n kubesrv-ns
 

@@ -1,6 +1,7 @@
 #ifndef KUBESRV_HTTP_H
 #define KUBESRV_HTTP_H
 
+#include "config.h"
 #include "server.h"
 #include <stddef.h>
 
