@@ -44,10 +44,40 @@ int server_init(server_ctx_t *ctx) {
     memset(ctx, 0, sizeof(*ctx));
     ctx->start_time = time(NULL);
     ctx->requests = 0;
+    ctx->failures = 0;
     ctx->port = KUBESRV_DEFAULT_PORT;
+    ctx->ready = 0;
     
     if (gethostname(ctx->hostname, sizeof(ctx->hostname)) < 0) {
         strncpy(ctx->hostname, "unknown", sizeof(ctx->hostname) - 1);
+    }
+    
+    env = getenv("POD_NAME");
+    if (env != NULL) {
+        strncpy(ctx->pod_name, env, sizeof(ctx->pod_name) - 1);
+    } else {
+        strncpy(ctx->pod_name, ctx->hostname, sizeof(ctx->pod_name) - 1);
+    }
+    
+    env = getenv("POD_NAMESPACE");
+    if (env != NULL) {
+        strncpy(ctx->pod_namespace, env, sizeof(ctx->pod_namespace) - 1);
+    } else {
+        strncpy(ctx->pod_namespace, "default", sizeof(ctx->pod_namespace) - 1);
+    }
+    
+    env = getenv("POD_IP");
+    if (env != NULL) {
+        strncpy(ctx->pod_ip, env, sizeof(ctx->pod_ip) - 1);
+    } else {
+        strncpy(ctx->pod_ip, "unknown", sizeof(ctx->pod_ip) - 1);
+    }
+    
+    env = getenv("NODE_NAME");
+    if (env != NULL) {
+        strncpy(ctx->node_name, env, sizeof(ctx->node_name) - 1);
+    } else {
+        strncpy(ctx->node_name, "unknown", sizeof(ctx->node_name) - 1);
     }
     
     env = getenv("PORT");
@@ -85,10 +115,13 @@ static void handle_client(int fd, const struct sockaddr_in *addr, server_ctx_t *
     buffer[n] = '\0';
     
     http_parse_request(buffer, &req);
+    strncpy(req.client_ip, ip, sizeof(req.client_ip) - 1);
     ctx->requests++;
     
     len = http_build_response(&req, ctx, response, sizeof(response));
-    write(fd, response, len);
+    if (write(fd, response, len) < 0) {
+        /* Ignore write errors */
+    }
     
     now = time(NULL);
     tm = gmtime(&now);
@@ -144,7 +177,7 @@ int server_run(server_ctx_t *ctx) {
     
     fprintf(stdout, "[kubesrv] %s v%s on port %d\n", 
             ctx->hostname, KUBESRV_VERSION, ctx->port);
-    fprintf(stdout, "[kubesrv] Endpoints: / /healthz /info /metrics\n");
+    fprintf(stdout, "[kubesrv] Endpoints: / /healthz /ready /info /identity /echo /fail /sleep /metrics\n");
     fflush(stdout);
     
     while (g_running) {

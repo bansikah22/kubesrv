@@ -5,6 +5,27 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+
+static int parse_query_param(const char *path, const char *key, char *value, size_t size) {
+    const char *q = strchr(path, '?');
+    if (!q) return 0;
+    
+    char *kv = strstr(q, key);
+    if (!kv) return 0;
+    
+    kv += strlen(key);
+    if (*kv != '=') return 0;
+    kv++;
+    
+    const char *end = strchr(kv, '&');
+    size_t len = end ? (size_t)(end - kv) : strlen(kv);
+    if (len >= size) len = size - 1;
+    
+    memcpy(value, kv, len);
+    value[len] = '\0';
+    return 1;
+}
 
 void http_parse_request(const char *raw, http_request_t *req) {
     const char *p, *end;
@@ -63,15 +84,47 @@ static int build_body_metrics(server_ctx_t *ctx, char *buf, size_t size) {
         "# HELP kubesrv_requests_total Total requests\n"
         "# TYPE kubesrv_requests_total counter\n"
         "kubesrv_requests_total %lu\n"
+        "# HELP kubesrv_failures_total Total failures\n"
+        "# TYPE kubesrv_failures_total counter\n"
+        "kubesrv_failures_total %lu\n"
         "# HELP kubesrv_uptime_seconds Uptime\n"
         "# TYPE kubesrv_uptime_seconds gauge\n"
         "kubesrv_uptime_seconds %ld\n",
-        ctx->requests, uptime);
+        ctx->requests, ctx->failures, uptime);
+}
+
+static int build_body_identity(server_ctx_t *ctx, char *buf, size_t size) {
+    return snprintf(buf, size,
+        "{\"pod\":\"%s\","
+        "\"namespace\":\"%s\","
+        "\"node\":\"%s\","
+        "\"ip\":\"%s\","
+        "\"hostname\":\"%s\"}\n",
+        ctx->pod_name, ctx->pod_namespace, 
+        ctx->node_name, ctx->pod_ip, ctx->hostname);
+}
+
+static int build_body_echo(const http_request_t *req, const char *client_ip, 
+                           char *buf, size_t size) {
+    return snprintf(buf, size,
+        "{\"method\":\"%s\","
+        "\"path\":\"%s\","
+        "\"client_ip\":\"%s\"}\n",
+        req->method, req->path, client_ip);
+}
+
+static int build_body_ready(server_ctx_t *ctx, char *buf, size_t size) {
+    long uptime = time(NULL) - ctx->start_time;
+    if (uptime < KUBESRV_READY_DELAY) {
+        return snprintf(buf, size, "Not Ready (warming up: %ld/%d)\n", 
+                       uptime, KUBESRV_READY_DELAY);
+    }
+    return snprintf(buf, size, "Ready\n");
 }
 
 static int build_body_index(server_ctx_t *ctx, char *buf, size_t size) {
     long uptime = time(NULL) - ctx->start_time;
-    char uptime_str[16];
+    char uptime_str[32];
     char out[KUBESRV_BUFFER_SIZE];
     char *dst = out;
     const char *src = INDEX_HTML;
@@ -109,16 +162,67 @@ int http_build_response(const http_request_t *req, server_ctx_t *ctx,
     const char *status;
     const char *ctype;
     char body[KUBESRV_BUFFER_SIZE];
+    char param[64];
     int blen;
+    long uptime;
     
     if (strcmp(req->path, "/healthz") == 0) {
         status = "200 OK";
         ctype = "text/plain";
         blen = build_body_healthz(body, sizeof(body));
+    } else if (strncmp(req->path, "/ready", 6) == 0) {
+        uptime = time(NULL) - ctx->start_time;
+        if (uptime < KUBESRV_READY_DELAY) {
+            status = "503 Service Unavailable";
+        } else {
+            status = "200 OK";
+        }
+        ctype = "text/plain";
+        blen = build_body_ready(ctx, body, sizeof(body));
     } else if (strcmp(req->path, "/info") == 0) {
         status = "200 OK";
         ctype = "application/json";
         blen = build_body_info(ctx, body, sizeof(body));
+    } else if (strcmp(req->path, "/identity") == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_identity(ctx, body, sizeof(body));
+    } else if (strncmp(req->path, "/echo", 5) == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_echo(req, req->client_ip, body, sizeof(body));
+    } else if (strncmp(req->path, "/fail", 5) == 0) {
+        if (parse_query_param(req->path, "code", param, sizeof(param))) {
+            int code = atoi(param);
+            if (code >= 400 && code < 600) {
+                ctx->failures++;
+                if (code == 500) status = "500 Internal Server Error";
+                else if (code == 503) status = "503 Service Unavailable";
+                else if (code == 404) status = "404 Not Found";
+                else status = "500 Internal Server Error";
+                ctype = "text/plain";
+                blen = snprintf(body, sizeof(body), "Simulated failure: %d\n", code);
+            } else {
+                status = "400 Bad Request";
+                ctype = "text/plain";
+                blen = snprintf(body, sizeof(body), "Invalid code\n");
+            }
+        } else {
+            ctx->failures++;
+            status = "500 Internal Server Error";
+            ctype = "text/plain";
+            blen = snprintf(body, sizeof(body), "Simulated failure\n");
+        }
+    } else if (strncmp(req->path, "/sleep", 6) == 0) {
+        if (parse_query_param(req->path, "ms", param, sizeof(param))) {
+            int ms = atoi(param);
+            if (ms > 0 && ms <= 10000) {
+                usleep(ms * 1000);
+            }
+        }
+        status = "200 OK";
+        ctype = "text/plain";
+        blen = snprintf(body, sizeof(body), "OK\n");
     } else if (strcmp(req->path, "/metrics") == 0) {
         status = "200 OK";
         ctype = "text/plain; version=0.0.4";
