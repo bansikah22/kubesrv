@@ -71,7 +71,7 @@ static int build_body_metrics(server_ctx_t *ctx, char *buf, size_t size) {
 
 static int build_body_index(server_ctx_t *ctx, char *buf, size_t size) {
     long uptime = time(NULL) - ctx->start_time;
-    char uptime_str[16];
+    char uptime_str[32];
     char out[KUBESRV_BUFFER_SIZE];
     char *dst = out;
     const char *src = INDEX_HTML;

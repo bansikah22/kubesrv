@@ -126,7 +126,9 @@ static void handle_client(int fd, const struct sockaddr_in *addr, server_ctx_t *
     ctx->requests++;
     
     len = http_build_response(&req, ctx, response, sizeof(response));
-    write(fd, response, len);
+    if (write(fd, response, len) < 0) {
+        /* Ignore write errors in forked process */
+    }
     
     now = time(NULL);
     tm = gmtime(&now);
