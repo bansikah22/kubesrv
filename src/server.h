@@ -5,6 +5,7 @@
 
 typedef struct {
     char hostname[256];
+    char message_buf[512];
     const char *message;
     time_t start_time;
     unsigned long requests;

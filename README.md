@@ -33,10 +33,51 @@ kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
 
 ## Configuration
 
+### Environment Variables
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `80` | Listen port |
-| `MESSAGE` | `Hello, Kubernetes!` | Greeting message |
+| `MESSAGE` | `Hello, Kubernetes!` | Greeting message (fallback) |
+| `MESSAGE_FILE` | - | Full path or filename to read message from |
+
+### ConfigMap Volume Mount
+
+You can mount any ConfigMap as a volume and specify the file path:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-config
+data:
+  greeting.txt: |
+    Hello from my custom ConfigMap!
+---
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+      - name: kubesrv
+        env:
+        - name: MESSAGE_FILE
+          value: "/usr/share/kubesrv/greeting.txt"  # Full path
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/kubesrv
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: my-config
+```
+
+**Priority order:**
+1. File from `${MESSAGE_FILE}` (if set)
+2. Environment variable `MESSAGE`
+3. Default: "Hello, Kubernetes!"
 
 ## Build
 
