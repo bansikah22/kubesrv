@@ -7,5 +7,6 @@
 #define KUBESRV_BACKLOG      64
 #define KUBESRV_HOSTNAME_MAX 256
 #define KUBESRV_PATH_MAX     256
+#define KUBESRV_CONFIG_DIR   "/usr/share/kubesrv"
 
 #endif

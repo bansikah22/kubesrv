@@ -40,6 +40,8 @@ static int setup_signals(void) {
 
 int server_init(server_ctx_t *ctx) {
     const char *env;
+    FILE *fp;
+    const char *config_file;
     
     memset(ctx, 0, sizeof(*ctx));
     ctx->start_time = time(NULL);
@@ -58,8 +60,44 @@ int server_init(server_ctx_t *ctx) {
         }
     }
     
-    env = getenv("MESSAGE");
-    ctx->message = (env != NULL) ? env : "Hello, Kubernetes!";
+    /* Check for MESSAGE_FILE env var */
+    config_file = getenv("MESSAGE_FILE");
+    if (config_file != NULL) {
+        /* Validate path to prevent directory traversal */
+        if (strstr(config_file, "..") != NULL) {
+            fprintf(stderr, "[kubesrv] ERROR: Invalid MESSAGE_FILE path (contains ..)\n");
+            config_file = NULL;
+        }
+    }
+    
+    if (config_file != NULL) {
+        /* Try to read from specified path */
+        fp = fopen(config_file, "r");
+        if (fp != NULL) {
+            if (fgets(ctx->message_buf, sizeof(ctx->message_buf), fp) != NULL) {
+                /* Ensure null termination */
+                ctx->message_buf[sizeof(ctx->message_buf) - 1] = '\0';
+                /* Remove trailing newline */
+                size_t len = strlen(ctx->message_buf);
+                if (len > 0 && ctx->message_buf[len - 1] == '\n') {
+                    ctx->message_buf[len - 1] = '\0';
+                }
+                ctx->message = ctx->message_buf;
+                fprintf(stdout, "[kubesrv] Loaded message from %s\n", config_file);
+            } else {
+                fprintf(stderr, "[kubesrv] WARNING: Failed to read from %s\n", config_file);
+            }
+            fclose(fp);
+        } else {
+            fprintf(stderr, "[kubesrv] WARNING: Cannot open file %s\n", config_file);
+        }
+    }
+    
+    /* Fall back to MESSAGE environment variable */
+    if (ctx->message == NULL || ctx->message[0] == '\0') {
+        env = getenv("MESSAGE");
+        ctx->message = (env != NULL) ? env : "Hello, Kubernetes!";
+    }
     
     return 0;
 }
