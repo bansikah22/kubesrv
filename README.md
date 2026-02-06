@@ -5,7 +5,7 @@ Minimal HTTP server in C for Kubernetes testing.
 
 ## Features
 
-- Ultra-small image (~1.19MB)
+- Ultra-small image (~26kb for v1.0.0(without shell) & 1MB for v1.1.0(with shell) )
 - Fork-based concurrency
 - Health checks (`/healthz`)
 - Prometheus metrics (`/metrics`)
