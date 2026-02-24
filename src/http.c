@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 void http_parse_request(const char *raw, http_request_t *req) {
     const char *p, *end;
@@ -104,6 +105,31 @@ static int build_body_index(server_ctx_t *ctx, char *buf, size_t size) {
     return snprintf(buf, size, "%s", out);
 }
 
+static int build_body_k8s(char *buf, size_t size) {
+    const char *pod_name = getenv("POD_NAME");
+    const char *pod_namespace = getenv("POD_NAMESPACE");
+    const char *pod_ip = getenv("POD_IP");
+    const char *node_name = getenv("NODE_NAME");
+    const char *service_account = getenv("SERVICE_ACCOUNT");
+    char hostname[256] = "unknown";
+
+    gethostname(hostname, sizeof(hostname));
+
+    return snprintf(buf, size,
+        "{\"pod_name\":\"%s\","
+        "\"namespace\":\"%s\","
+        "\"node_name\":\"%s\","
+        "\"pod_ip\":\"%s\","
+        "\"service_account\":\"%s\","
+        "\"hostname\":\"%s\"}\n",
+        pod_name ? pod_name : "N/A",
+        pod_namespace ? pod_namespace : "N/A",
+        node_name ? node_name : "N/A",
+        pod_ip ? pod_ip : "N/A",
+        service_account ? service_account : "N/A",
+        hostname);
+}
+
 int http_build_response(const http_request_t *req, server_ctx_t *ctx,
                         char *buf, size_t size) {
     const char *status;
@@ -123,6 +149,10 @@ int http_build_response(const http_request_t *req, server_ctx_t *ctx,
         status = "200 OK";
         ctype = "text/plain; version=0.0.4";
         blen = build_body_metrics(ctx, body, sizeof(body));
+    } else if (strcmp(req->path, "/debug/k8s") == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_k8s(body, sizeof(body));
     } else if (strcmp(req->path, "/") == 0) {
         status = "200 OK";
         ctype = "text/html; charset=utf-8";
