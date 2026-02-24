@@ -200,12 +200,14 @@ static int build_body_k8s(char *buf, size_t size) {
 
 static int build_body_dns(const http_request_t *req, char *buf, size_t size) {
     char host[256];
+    char host_esc[512];
     if (!get_query_param(req->query, "host", host, sizeof(host))) {
         return snprintf(buf, size, "{\"error\":\"host parameter is required\"}\n");
     }
+    json_escape(host_esc, host, sizeof(host_esc));
 
     struct addrinfo hints, *res;
-    char ipstr[INET_ADDRSTRLEN];
+    char ipstr[INET6_ADDRSTRLEN];
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -213,7 +215,7 @@ static int build_body_dns(const http_request_t *req, char *buf, size_t size) {
 
     int status = getaddrinfo(host, NULL, &hints, &res);
     if (status != 0) {
-        return snprintf(buf, size, "{\"host\":\"%s\",\"success\":false,\"error\":\"%s\"}\n", host, gai_strerror(status));
+        return snprintf(buf, size, "{\"host\":\"%s\",\"success\":false,\"error\":\"%s\"}\n", host_esc, gai_strerror(status));
     }
 
     void *addr;
@@ -228,16 +230,18 @@ static int build_body_dns(const http_request_t *req, char *buf, size_t size) {
     inet_ntop(res->ai_family, addr, ipstr, sizeof ipstr);
     freeaddrinfo(res);
 
-    return snprintf(buf, size, "{\"host\":\"%s\",\"resolved_ip\":\"%s\",\"success\":true}\n", host, ipstr);
+    return snprintf(buf, size, "{\"host\":\"%s\",\"resolved_ip\":\"%s\",\"success\":true}\n", host_esc, ipstr);
 }
 
 static int build_body_tcp(const http_request_t *req, char *buf, size_t size) {
     char host[256];
     char port_str[8];
+    char host_esc[512];
 
     if (!get_query_param(req->query, "host", host, sizeof(host)) || !get_query_param(req->query, "port", port_str, sizeof(port_str))) {
         return snprintf(buf, size, "{\"error\":\"host and port parameters are required\"}\n");
     }
+    json_escape(host_esc, host, sizeof(host_esc));
 
     int port = atoi(port_str);
     if (port <= 0 || port > 65535) {
@@ -250,10 +254,14 @@ static int build_body_tcp(const http_request_t *req, char *buf, size_t size) {
     hints.ai_socktype = SOCK_STREAM;
 
     if (getaddrinfo(host, port_str, &hints, &res) != 0) {
-        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"dns resolution failed\"}\n", host, port);
+        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"dns resolution failed\"}\n", host_esc, port);
     }
 
     int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sockfd < 0) {
+        freeaddrinfo(res);
+        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"socket creation failed\"}\n", host_esc, port);
+    }
     
     struct timeval start, end;
     gettimeofday(&start, NULL);
@@ -267,10 +275,10 @@ static int build_body_tcp(const http_request_t *req, char *buf, size_t size) {
     freeaddrinfo(res);
 
     if (result == -1) {
-        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"connection failed\"}\n", host, port);
+        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"connection failed\"}\n", host_esc, port);
     }
 
-    return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":true,\"latency_ms\":%ld}\n", host, port, latency);
+    return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":true,\"latency_ms\":%ld}\n", host_esc, port, latency);
 }
 
 int http_build_response(const http_request_t *req, server_ctx_t *ctx,
