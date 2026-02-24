@@ -31,6 +31,8 @@ kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
 | `/info` | JSON server info |
 | `/metrics` | Prometheus metrics |
 | `/debug/k8s` | Kubernetes debug info |
+| `/dns?host=<hostname>` | DNS lookup |
+| `/tcp?host=<host>&port=<port>` | TCP connectivity test |
 
 ## Configuration
 

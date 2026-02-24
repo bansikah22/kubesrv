@@ -7,6 +7,7 @@
 typedef struct {
     char method[8];
     char path[256];
+    char query[256];
 } http_request_t;
 
 void http_parse_request(const char *raw, http_request_t *req);

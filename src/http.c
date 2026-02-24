@@ -6,6 +6,11 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <sys/time.h>
 
 void http_parse_request(const char *raw, http_request_t *req) {
     const char *p, *end;
@@ -28,10 +33,51 @@ void http_parse_request(const char *raw, http_request_t *req) {
     end = strchr(p, ' ');
     if (end == NULL) return;
     
-    len = end - p;
-    if (len >= sizeof(req->path)) len = sizeof(req->path) - 1;
-    memcpy(req->path, p, len);
-    req->path[len] = '\0';
+    const char *query = strchr(p, '?');
+    if (query != NULL && query < end) {
+        len = query - p;
+        if (len >= sizeof(req->path)) len = sizeof(req->path) - 1;
+        memcpy(req->path, p, len);
+        req->path[len] = '\0';
+
+        len = end - (query + 1);
+        if (len >= sizeof(req->query)) len = sizeof(req->query) - 1;
+        memcpy(req->query, query + 1, len);
+        req->query[len] = '\0';
+    } else {
+        len = end - p;
+        if (len >= sizeof(req->path)) len = sizeof(req->path) - 1;
+        memcpy(req->path, p, len);
+        req->path[len] = '\0';
+    }
+}
+
+static int get_query_param(const char *query, const char *key, char *value, size_t value_size) {
+    const char *p = query;
+    size_t key_len = strlen(key);
+
+    while (p) {
+        if (strncmp(p, key, key_len) == 0 && p[key_len] == '=') {
+            const char *val_start = p + key_len + 1;
+            const char *val_end = strchr(val_start, '&');
+            size_t val_len;
+            if (val_end) {
+                val_len = val_end - val_start;
+            } else {
+                val_len = strlen(val_start);
+            }
+
+            if (val_len >= value_size) {
+                val_len = value_size - 1;
+            }
+            memcpy(value, val_start, val_len);
+            value[val_len] = '\0';
+            return 1;
+        }
+        p = strchr(p, '&');
+        if (p) p++;
+    }
+    return 0;
 }
 
 static int build_body_healthz(char *buf, size_t size) {
@@ -152,6 +198,81 @@ static int build_body_k8s(char *buf, size_t size) {
         pod_name_esc, namespace_esc, node_name_esc, pod_ip_esc, sa_esc, hostname_esc);
 }
 
+static int build_body_dns(const http_request_t *req, char *buf, size_t size) {
+    char host[256];
+    if (!get_query_param(req->query, "host", host, sizeof(host))) {
+        return snprintf(buf, size, "{\"error\":\"host parameter is required\"}\n");
+    }
+
+    struct addrinfo hints, *res;
+    char ipstr[INET_ADDRSTRLEN];
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    int status = getaddrinfo(host, NULL, &hints, &res);
+    if (status != 0) {
+        return snprintf(buf, size, "{\"host\":\"%s\",\"success\":false,\"error\":\"%s\"}\n", host, gai_strerror(status));
+    }
+
+    void *addr;
+    if (res->ai_family == AF_INET) {
+        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+        addr = &(ipv4->sin_addr);
+    } else {
+        struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)res->ai_addr;
+        addr = &(ipv6->sin6_addr);
+    }
+
+    inet_ntop(res->ai_family, addr, ipstr, sizeof ipstr);
+    freeaddrinfo(res);
+
+    return snprintf(buf, size, "{\"host\":\"%s\",\"resolved_ip\":\"%s\",\"success\":true}\n", host, ipstr);
+}
+
+static int build_body_tcp(const http_request_t *req, char *buf, size_t size) {
+    char host[256];
+    char port_str[8];
+
+    if (!get_query_param(req->query, "host", host, sizeof(host)) || !get_query_param(req->query, "port", port_str, sizeof(port_str))) {
+        return snprintf(buf, size, "{\"error\":\"host and port parameters are required\"}\n");
+    }
+
+    int port = atoi(port_str);
+    if (port <= 0 || port > 65535) {
+        return snprintf(buf, size, "{\"error\":\"invalid port\"}\n");
+    }
+
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(host, port_str, &hints, &res) != 0) {
+        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"dns resolution failed\"}\n", host, port);
+    }
+
+    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+
+    int result = connect(sockfd, res->ai_addr, res->ai_addrlen);
+
+    gettimeofday(&end, NULL);
+    long latency = ((end.tv_sec - start.tv_sec) * 1000) + ((end.tv_usec - start.tv_usec) / 1000);
+
+    close(sockfd);
+    freeaddrinfo(res);
+
+    if (result == -1) {
+        return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":false,\"error\":\"connection failed\"}\n", host, port);
+    }
+
+    return snprintf(buf, size, "{\"host\":\"%s\",\"port\":%d,\"connected\":true,\"latency_ms\":%ld}\n", host, port, latency);
+}
+
 int http_build_response(const http_request_t *req, server_ctx_t *ctx,
                         char *buf, size_t size) {
     const char *status;
@@ -178,6 +299,14 @@ int http_build_response(const http_request_t *req, server_ctx_t *ctx,
         if (blen >= sizeof(body)) {
             blen = sizeof(body) - 1;
         }
+    } else if (strcmp(req->path, "/dns") == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_dns(req, body, sizeof(body));
+    } else if (strcmp(req->path, "/tcp") == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_tcp(req, body, sizeof(body));
     } else if (strcmp(req->path, "/") == 0) {
         status = "200 OK";
         ctype = "text/html; charset=utf-8";
