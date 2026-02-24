@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 void http_parse_request(const char *raw, http_request_t *req) {
     const char *p, *end;
@@ -104,6 +105,53 @@ static int build_body_index(server_ctx_t *ctx, char *buf, size_t size) {
     return snprintf(buf, size, "%s", out);
 }
 
+static void json_escape(char *dest, const char *src, size_t dest_size) {
+    if (!src) {
+        strncpy(dest, "N/A", dest_size - 1);
+        dest[dest_size - 1] = '\0';
+        return;
+    }
+
+    size_t i = 0, j = 0;
+    while (src[i] != '\0' && j < dest_size - 1) {
+        if (src[i] == '"' || src[i] == '\\') {
+            if (j + 1 < dest_size - 1) {
+                dest[j++] = '\\';
+            } else {
+                break;
+            }
+        }
+        dest[j++] = src[i++];
+    }
+    dest[j] = '\0';
+}
+
+static int build_body_k8s(char *buf, size_t size) {
+    char pod_name_esc[256], namespace_esc[256], node_name_esc[256], pod_ip_esc[256], sa_esc[256], hostname_esc[256];
+
+    json_escape(pod_name_esc, getenv("POD_NAME"), sizeof(pod_name_esc));
+    json_escape(namespace_esc, getenv("POD_NAMESPACE"), sizeof(namespace_esc));
+    json_escape(node_name_esc, getenv("NODE_NAME"), sizeof(node_name_esc));
+    json_escape(pod_ip_esc, getenv("POD_IP"), sizeof(pod_ip_esc));
+    json_escape(sa_esc, getenv("SERVICE_ACCOUNT"), sizeof(sa_esc));
+
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        strncpy(hostname, "unknown", sizeof(hostname) - 1);
+        hostname[sizeof(hostname) - 1] = '\0';
+    }
+    json_escape(hostname_esc, hostname, sizeof(hostname_esc));
+
+    return snprintf(buf, size,
+        "{\"pod_name\":\"%s\","
+        "\"namespace\":\"%s\","
+        "\"node_name\":\"%s\","
+        "\"pod_ip\":\"%s\","
+        "\"service_account\":\"%s\","
+        "\"hostname\":\"%s\"}\n",
+        pod_name_esc, namespace_esc, node_name_esc, pod_ip_esc, sa_esc, hostname_esc);
+}
+
 int http_build_response(const http_request_t *req, server_ctx_t *ctx,
                         char *buf, size_t size) {
     const char *status;
@@ -123,6 +171,13 @@ int http_build_response(const http_request_t *req, server_ctx_t *ctx,
         status = "200 OK";
         ctype = "text/plain; version=0.0.4";
         blen = build_body_metrics(ctx, body, sizeof(body));
+    } else if (strcmp(req->path, "/debug/k8s") == 0) {
+        status = "200 OK";
+        ctype = "application/json";
+        blen = build_body_k8s(body, sizeof(body));
+        if (blen >= sizeof(body)) {
+            blen = sizeof(body) - 1;
+        }
     } else if (strcmp(req->path, "/") == 0) {
         status = "200 OK";
         ctype = "text/html; charset=utf-8";

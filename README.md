@@ -30,6 +30,7 @@ kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
 | `/healthz` | Health check |
 | `/info` | JSON server info |
 | `/metrics` | Prometheus metrics |
+| `/debug/k8s` | Kubernetes debug info |
 
 ## Configuration
 
