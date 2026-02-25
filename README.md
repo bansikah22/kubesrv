@@ -1,7 +1,7 @@
 # kubesrv
 
 Minimal HTTP server in C for Kubernetes testing.
-![UI](./docs/images/latest-ui-14-26.png)
+![UI](./docs/images/release-1-2-0.png)
 
 ## Features
 
@@ -81,6 +81,41 @@ spec:
 1. File from `${MESSAGE_FILE}` (if set)
 2. Environment variable `MESSAGE`
 3. Default: "Hello, Kubernetes!"
+
+### Downward API
+
+The `/debug/k8s` endpoint relies on the Kubernetes Downward API to expose pod information as environment variables. You must configure your deployment to pass this information to the container.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+      - name: kubesrv
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+```
 
 ## Build
 
