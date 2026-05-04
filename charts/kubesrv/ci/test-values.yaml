@@ -1,0 +1,28 @@
+# Values for CI testing
+replicaCount: 2
+
+image:
+  tag: latest
+
+service:
+  type: LoadBalancer
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: test.kubesrv.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 64Mi
+  requests:
+    cpu: 50m
+    memory: 32Mi
+
+config:
+  message: "Test message from CI"
