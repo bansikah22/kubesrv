@@ -17,10 +17,39 @@ Minimal HTTP server in C for Kubernetes testing.
 # Run locally
 docker run -p 8080:80 bansikah/kubesrv:latest
 
-# Deploy to Kubernetes
+# Deploy to Kubernetes using Manifests
 kubectl apply -f k8s/
 kubectl port-forward svc/kubesrv-svc 8080:80 -n kubesrv-ns
+
+# Deploy to Kubernetes using Helm
+helm install my-kubesrv ./charts/kubesrv
+kubectl port-forward svc/my-kubesrv-kubesrv 8080:80
 ```
+
+## Helm Chart
+
+The project includes a reusable Helm chart located in `charts/kubesrv`. For detailed information on security features and customization, see the [Helm Documentation](docs/HELM.md).
+
+### Installation
+
+```bash
+helm install [RELEASE_NAME] ./charts/kubesrv
+```
+
+### Configuration
+
+The following table lists the configurable parameters of the kubesrv chart and their default values.
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `replicaCount` | Number of replicas | `1` |
+| `image.repository` | Image repository | `bansikah/kubesrv` |
+| `image.tag` | Image tag | `""` (defaults to chart appVersion) |
+| `service.type` | Service type | `ClusterIP` |
+| `service.port` | Service port | `80` |
+| `config.message` | Greeting message | `"Hello, Kubernetes from Helm!"` |
+| `resources.limits.cpu` | CPU limit | `100m` |
+| `resources.limits.memory` | Memory limit | `32Mi` |
 
 ## Endpoints
 
@@ -122,6 +151,15 @@ spec:
 ```bash
 docker build -t bansikah/kubesrv:latest .
 ```
+
+## CI/CD
+
+The project includes automated workflows for continuous integration and deployment using GitHub Actions:
+
+- **Build and Push**: Triggered on tags (e.g., `v1.0.0`), builds the Docker image and pushes it to the registry.
+- **Helm CD**: Triggered on changes to Helm charts, performs linting, security scanning, and functional testing in a KinD cluster.
+
+See [.github/workflows/](.github/workflows/) for details.
 
 ## License
 
