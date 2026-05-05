@@ -2,7 +2,7 @@
 src/generated/
 
 # Compiled binary
-kubesrv
+/kubesrv
 
 # Build artifacts
 *.o
