@@ -1,4 +1,4 @@
-FROM alpine:3.19 AS builder
+FROM alpine:3.23 AS builder
 RUN apk add --no-cache gcc musl-dev wget
 WORKDIR /build
 COPY src/ src/
