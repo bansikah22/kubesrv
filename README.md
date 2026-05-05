@@ -2,6 +2,7 @@
 [![CI](https://github.com/bansikah22/kubesrv/actions/workflows/ci.yml/badge.svg)](https://github.com/bansikah22/kubesrv/actions/workflows/ci.yml)
 [![Build and Push](https://github.com/bansikah22/kubesrv/actions/workflows/build.yml/badge.svg)](https://github.com/bansikah22/kubesrv/actions/workflows/build.yml)
 [![Helm CD](https://github.com/bansikah22/kubesrv/actions/workflows/helm-cd.yml/badge.svg)](https://github.com/bansikah22/kubesrv/actions/workflows/helm-cd.yml)
+![Dependabot](https://img.shields.io/badge/dependabot-active-brightgreen.svg?logo=dependabot)
 
 Minimal HTTP server in C for Kubernetes testing.
 ![UI](./docs/images/release-1-2-0.png)
