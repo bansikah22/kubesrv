@@ -81,3 +81,35 @@ You can override any value in `values.yaml` during installation:
 ```bash
 helm install my-release ./charts/kubesrv --set replicaCount=3 --set config.message="Custom Message"
 ```
+## Releasing the Chart
+The project uses GitHub Actions to automatically publish the Helm chart to the **GitHub Container Registry (GHCR)** as an OCI artifact.
+
+### How to trigger a release
+You can release a new version of the chart by pushing a Git tag. There are two ways:
+1. **Full Release**: Pushing a tag like `v1.2.0` will build the Docker image AND publish the Helm chart.
+2. **Chart-only Release**: Pushing a tag like `helm-v0.1.5` will **only** package and publish the Helm chart.
+
+```bash
+# Example: Release a specific chart version
+git tag helm-v0.1.0
+git push origin helm-v0.1.0
+```
+
+### How to use the published chart
+Once published, the chart is available at `oci://ghcr.io/bansikah22/charts/kubesrv`.
+
+#### 1. Login to Registry
+```bash
+export HELM_EXPERIMENTAL_OCI=1
+echo $GITHUB_TOKEN | helm registry login ghcr.io -u <username> --password-stdin
+```
+
+#### 2. Install the Chart
+```bash
+helm install my-kubesrv oci://ghcr.io/bansikah22/charts/kubesrv --version 0.1.0
+```
+
+#### 3. Inspect the Chart
+```bash
+helm show chart oci://ghcr.io/bansikah22/charts/kubesrv --version 0.1.0
+```

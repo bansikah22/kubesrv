@@ -2,7 +2,7 @@ name: Build and Push
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', 'helm-v*']
   # pull_request:
   #   branches: [master]
 
@@ -55,7 +55,7 @@ jobs:
 
   release-chart:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/helm-v')
     permissions:
       contents: read
       packages: write
@@ -75,8 +75,9 @@ jobs:
 
       - name: Package and Push Helm Chart
         run: |
-          # Use the tag name as the chart version (removing the 'v' prefix)
-          VERSION=${GITHUB_REF_NAME#v}
+          # Use the tag name as the chart version (removing 'helm-v' or 'v' prefix)
+          VERSION=${GITHUB_REF_NAME#helm-v}
+          VERSION=${VERSION#v}
           
           # Update the version in Chart.yaml
           sed -i "s/^version: .*/version: ${VERSION}/" charts/kubesrv/Chart.yaml
