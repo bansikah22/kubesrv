@@ -35,7 +35,7 @@ jobs:
       - name: Install kube-linter
         run: |
           KUBE_LINTER_VERSION=0.6.8
-          KUBE_LINTER_SHA256="405103c8095f4e565987163359d9972b2a60a74b88939c4f1c1f46399b959550"
+          KUBE_LINTER_SHA256="4787d32f66c76c0c32dd0e076ef1fd0bc4fc6b485966e4cfaf29f5a0e3f8e76b"
           curl -L -o kube-linter.tar.gz "https://github.com/stackrox/kube-linter/releases/download/v${KUBE_LINTER_VERSION}/kube-linter-linux.tar.gz"
           echo "${KUBE_LINTER_SHA256}  kube-linter.tar.gz" | sha256sum -c -
           tar -xzf kube-linter.tar.gz
