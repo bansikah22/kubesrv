@@ -32,18 +32,10 @@ jobs:
       - name: Template Validation (CI Values)
         run: helm template kubesrv charts/kubesrv -f charts/kubesrv/ci/test-values.yaml --debug
 
-      - name: Install kube-linter
-        run: |
-          KUBE_LINTER_VERSION=0.6.8
-          KUBE_LINTER_SHA256="4787d32f66c76c0c32dd0e076ef1fd0bc4fc6b485966e4cfaf29f5a0e3f8e76b"
-          curl -L -o kube-linter.tar.gz "https://github.com/stackrox/kube-linter/releases/download/v${KUBE_LINTER_VERSION}/kube-linter-linux.tar.gz"
-          echo "${KUBE_LINTER_SHA256}  kube-linter.tar.gz" | sha256sum -c -
-          tar -xzf kube-linter.tar.gz
-          sudo mv kube-linter /usr/local/bin/
-          rm kube-linter.tar.gz
-
       - name: Security Scan with kube-linter
-        run: kube-linter lint charts/kubesrv
+        uses: stackrox/kube-linter-action@v1.0.4
+        with:
+          directory: charts/kubesrv
 
   deploy-preview:
     if: github.event_name == 'pull_request'
